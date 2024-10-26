@@ -2,8 +2,9 @@ import express from 'express';
 import multer from 'multer';
 import dotenv from 'dotenv';
 import cors from 'cors';
-import {v2 as cloudinary} from 'cloudinary';
+import { v2 as cloudinary } from 'cloudinary';
 import fs from 'fs';
+import path from 'path';
 
 // Configure environment variables
 dotenv.config();
@@ -24,29 +25,35 @@ app.use(express.json());
 
 // Configure multer for memory storage
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
     storage: storage,
     limits: {
         fileSize: 5 * 1024 * 1024, // 5MB limit
     }
 });
 
+// Ensure the temp directory exists
+const tempDir = path.join('/tmp', 'temp');
+if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir);
+}
+
 // Cloudinary upload function
 const uploadOnCloudinary = async (localFilePath) => {
     try {
         if (!localFilePath) return null;
-        
+
         // Upload the file on cloudinary
         const response = await cloudinary.uploader.upload(localFilePath, {
             resource_type: "auto",
         });
-        
+
         // File has been uploaded successfully
         console.log("File is uploaded on cloudinary", response.url);
-        
+
         // Remove the locally saved temporary file
         fs.unlinkSync(localFilePath);
-        
+
         return response;
     } catch (error) {
         console.error('Error uploading file:', error);
@@ -60,7 +67,7 @@ const uploadOnCloudinary = async (localFilePath) => {
 
 // Temporary file handling function
 const saveBufferToTemp = async (buffer, originalname) => {
-    const tempPath = `temp_${Date.now()}_${originalname}`;
+    const tempPath = path.join(tempDir, `temp_${Date.now()}_${originalname}`);
     await fs.promises.writeFile(tempPath, buffer);
     return tempPath;
 };
@@ -79,18 +86,18 @@ app.post('/api/upload', upload.array('images', 5), async (req, res) => {
             try {
                 // Save buffer to temporary file
                 const tempPath = await saveBufferToTemp(file.buffer, file.originalname);
-                
+
                 // Upload to Cloudinary
                 const cloudinaryResponse = await uploadOnCloudinary(tempPath);
-                
+
                 if (!cloudinaryResponse) {
                     throw new Error('Cloudinary upload failed');
                 }
 
                 return {
-                    // originalname: file.originalname,
-                    // cloudinaryUrl: cloudinaryResponse.url,
-                    // publicId: cloudinaryResponse.public_id,
+                    originalname: file.originalname,
+                    cloudinaryUrl: cloudinaryResponse.url,
+                    publicId: cloudinaryResponse.public_id,
                     secureUrl: cloudinaryResponse.secure_url
                 };
             } catch (error) {
@@ -146,8 +153,5 @@ app.use((error, req, res, next) => {
     });
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+// Export the Express app for Vercel
+export default app;
