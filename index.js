@@ -136,7 +136,7 @@ app.post('/api/upload', upload.array('images', 5), async (req, res) => {
 });
 
 // Test endpoint
-app.get('/health', (req, res) => {
+app.get('/', (req, res) => {
     res.status(200).json({
         success: true,
         message: "Server is running"
